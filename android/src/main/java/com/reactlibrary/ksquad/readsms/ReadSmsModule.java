@@ -74,7 +74,7 @@ public class ReadSmsModule extends ReactContextBaseJavaModule {
         }
     }
 
-    private String getMessageFromMessageIntent(Intent intent) {
+    private SmsMessage getMessageFromMessageIntent(Intent intent) {
         final Bundle bundle = intent.getExtras();
         SmsMessage message = null;
         try {
