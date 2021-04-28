@@ -19,6 +19,11 @@ import com.facebook.react.bridge.ReactMethod;
 import com.facebook.react.bridge.WritableMap;
 import com.facebook.react.modules.core.DeviceEventManagerModule;
 
+import java.io.StringWriter;
+import java.io.PrintWriter;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Method;
+
 public class ReadSmsModule extends ReactContextBaseJavaModule {
 
     private final ReactApplicationContext reactContext;
@@ -45,6 +50,7 @@ public class ReadSmsModule extends ReactContextBaseJavaModule {
         }
     }
 
+    @SuppressWarnings("deprecation")
     @ReactMethod
     public void startReadSMS(final Callback success, final Callback error) {
         try {
@@ -54,9 +60,39 @@ public class ReadSmsModule extends ReactContextBaseJavaModule {
                     @Override
                     public void onReceive(Context context, Intent intent) {
                         WritableMap params = Arguments.createMap();
-                        SmsMessage message = getMessageFromMessageIntent(intent);
+                        final Bundle bundle = intent.getExtras();
+                        SmsMessage message = null;
+                        String receiver = "";
+                        if (bundle != null) {
+                            final Object[] pdusObj = (Object[]) bundle.get("pdus");
+                            if (pdusObj != null) {
+                                for (Object aPdusObj : pdusObj) {
+                                    try {
+                                        message = SmsMessage.createFromPdu((byte[]) aPdusObj);
+
+                                        // Construct a PduParser instance
+                                        Class pduParserClass = Class.forName("com.android.internal.telephony.gsm.SmsMessage$PduParser");
+                                        Constructor constructor = pduParserClass.getDeclaredConstructor(byte[].class);
+                                        constructor.setAccessible(true);
+                                        Object pduParser = constructor.newInstance((byte[]) aPdusObj);
+
+                                        // Get the GsmSmsAddress instance using getAddress
+                                        Method method = pduParser.getClass().getDeclaredMethod("getAddress");
+                                        method.setAccessible(true);
+                                        Object gsmSmsAddress = method.invoke(pduParser);
+
+                                        // Get the recipient address from GsmSmsAddress using getAddressString
+                                        Method method2 = gsmSmsAddress.getClass().getMethod("getAddressString");
+                                        receiver = (String)method2.invoke(gsmSmsAddress);
+                                    } catch (Exception e) {
+                                        e.printStackTrace();
+                                    }
+                                }
+                            }
+                        }
+
                         params.putString("message", message.getDisplayMessageBody());
-                        params.putString("receiver", message.getRecipientAddress());
+                        params.putString("receiver", receiver);
 
                         reactContext.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class)
                                 .emit("received_sms", params);
@@ -72,23 +108,5 @@ public class ReadSmsModule extends ReactContextBaseJavaModule {
         } catch (Exception e) {
             e.printStackTrace();
         }
-    }
-
-    private SmsMessage getMessageFromMessageIntent(Intent intent) {
-        final Bundle bundle = intent.getExtras();
-        SmsMessage message = null;
-        try {
-            if (bundle != null) {
-                final Object[] pdusObj = (Object[]) bundle.get("pdus");
-                if (pdusObj != null) {
-                    for (Object aPdusObj : pdusObj) {
-                        message = SmsMessage.createFromPdu((byte[]) aPdusObj);
-                    }
-                }
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-        return message;
     }
 }
