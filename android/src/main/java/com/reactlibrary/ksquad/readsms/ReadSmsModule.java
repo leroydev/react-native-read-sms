@@ -11,10 +11,12 @@ import android.telephony.SmsMessage;
 
 import androidx.core.content.ContextCompat;
 
+import com.facebook.react.bridge.Arguments;
 import com.facebook.react.bridge.Callback;
 import com.facebook.react.bridge.ReactApplicationContext;
 import com.facebook.react.bridge.ReactContextBaseJavaModule;
 import com.facebook.react.bridge.ReactMethod;
+import com.facebook.react.bridge.WritableMap;
 import com.facebook.react.modules.core.DeviceEventManagerModule;
 
 public class ReadSmsModule extends ReactContextBaseJavaModule {
@@ -51,8 +53,13 @@ public class ReadSmsModule extends ReactContextBaseJavaModule {
                 msgReceiver = new BroadcastReceiver() {
                     @Override
                     public void onReceive(Context context, Intent intent) {
+                        WritableMap params = Arguments.createMap();
+                        SmsMessage message = getMessageFromMessageIntent(intent);
+                        params.putString("message", message.getDisplayMessageBody());
+                        params.putString("receiver", message.getRecipientAddress());
+
                         reactContext.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class)
-                                .emit("received_sms", getMessageFromMessageIntent(intent));
+                                .emit("received_sms", params);
                     }
                 };
                 String SMS_RECEIVED_ACTION = "android.provider.Telephony.SMS_RECEIVED";
@@ -69,14 +76,13 @@ public class ReadSmsModule extends ReactContextBaseJavaModule {
 
     private String getMessageFromMessageIntent(Intent intent) {
         final Bundle bundle = intent.getExtras();
-        String message = "";
+        SmsMessage message = null;
         try {
             if (bundle != null) {
                 final Object[] pdusObj = (Object[]) bundle.get("pdus");
                 if (pdusObj != null) {
                     for (Object aPdusObj : pdusObj) {
-                        SmsMessage currentMessage = SmsMessage.createFromPdu((byte[]) aPdusObj);
-                        message = currentMessage.getDisplayMessageBody();
+                        message = SmsMessage.createFromPdu((byte[]) aPdusObj);
                     }
                 }
             }
